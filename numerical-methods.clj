@@ -24,28 +24,26 @@
     [(concat [(nth A p)] (take p A) (drop (inc p) A)) p]))
 ;(println (pivot A 1))
 
-;(defn backward-substitution [U c] 
-;; Solves a linear system 'Ux = c' by calculating the backward substitution.
-;    ; Take upper triangular matrix without zeros and cons vector c.
-;    (let [U (map
-;              #(cons %1 (take-last %3 %2)) 
-;              c U (iterate dec (count U)))]
-;      (reduce
-;        #(cons 
-;          (/ (- (first %2) (apply + (map * %1 (nnext %2)))) (second %2))
-;          %1)
-;        '() (reverse U))))
-;(println (backward-substitution [[2 4 1][0 0.8 0.5][0 0 3]] [-3.8 -0.4 9.6]))
-
-(defn backward-substitution-sparse [U c] 
+(defn backward-substitution [U c] 
 ; Solves a linear system 'Ux = c' by calculating the backward substitution.
     ; Take upper triangular matrix without zeros and cons vector c.
-    (let [U (map #(cons %1 %2) c U)]
+    (let [U (map
+              #(cons %1 (take-last %3 %2)) 
+              c U (iterate dec (count U)))]
       (reduce
         #(cons 
           (/ (- (first %2) (apply + (map * %1 (nnext %2)))) (second %2))
           %1)
         '() (reverse U))))
+(println (backward-substitution [[2 4 1][0 0.8 0.5][0 0 3]] [-3.8 -0.4 9.6]))
+
+(defn backward-substitution-sparse [U c] 
+; Solves a linear system 'Ux = c' by calculating the backward substitution.
+  (reduce
+    #(cons 
+      (/ (- (first %2) (apply + (map * %1 (nnext %2)))) (second %2))
+      %1)
+    '() (reverse (map #(cons %1 %2) c U))))
 
 
 (defn backward-substitution1 [U c] 

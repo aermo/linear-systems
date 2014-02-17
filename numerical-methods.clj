@@ -29,13 +29,13 @@
 (defn pivot [A k]
   ; Find the row with the greatest value in the column k.
   (let [p (->> 
-            (map (partial first) A)  ; Take column k.
+            (map first A)  ; Take column k.
             ;(map #(nth % k) A)  ; Take column k.
             (zipmap (range))    ; Add row index.
             (apply max-key val) ; Take the key-value-pair with greatest value.
             (key))]             ; Extract the key.
   ; Move the row on the top
-    [(concat [(nth A p)] (take p A) (drop (inc p) A)) p]))
+    {:A (concat [(nth A p)] (take p A) (drop (inc p) A)) :p p}))
 ;(println (pivot A 1))
 
 ;(defn backward-substitution [U c] 
@@ -55,9 +55,9 @@
 ; Solves a linear system 'Ux = c' by calculating the backward substitution.
   (if (coll? (first c))
     ; If c is a matrix (transposed) calculate each column separately.
-    (map (partial backward-substitution-sparse U) c)
+    (map (partial backward-substitution-sparse U) c) ; Then
     ; Take upper triangular matrix without zeros and cons vector c.
-    (let [U (map (partial cons) c U)]
+    (let [U (map cons c U)] ; Else
       (reduce
         #(cons 
           (/ (- (first %2) (apply + (map * %1 (nnext %2)))) (second %2))
@@ -127,7 +127,7 @@
             (sub-ge [A k]
               (when-first [a1 A]
                 (cons (concat (repeat k 0) a1)
-                      (sub-ge (elimination-step (first (pivot A 0))) (inc k)))))]
+                      (sub-ge (elimination-step ((pivot A 0) :A)) (inc k)))))]
     (sub-ge A 0))))
 ;(println (gaussian-elimination-with-pivoting A b))
 
@@ -141,29 +141,33 @@
           (sub-ge [A k p]
             (when-first [a1 A]
               (let [Ap (pivot A 0)
-                    Am (elimination-step (first Ap))]
+                    Am (elimination-step (Ap :A))]
                 (cons [(concat (repeat k 0) [1] (reverse (map second Am))) ; Li (transpose)
-                       (concat (repeat k 0) (first (first Ap)))     ; return Ui
-                       (nth p (second Ap))]                                ; pi
-                      (sub-ge (map first Am)  (inc k) (remove #(= (second Ap) %) p))))))]
+                       (concat (repeat k 0) (first (Ap :A)))     ; return Ui
+                       (nth p (Ap :p))]                                ; pi
+                      (sub-ge (map first Am) (inc k) (remove (partial = (Ap :p)) p))))))]
   (apply map vector (sub-ge A 0 (range (count A))))))
 (def LUp (lu-factorization A))
+(println "LUp = " LUp)
 
 (defn lu-factorization-sparse [A]
   (letfn [(elimination-step [A]
-            (map 
-              (fn [ai]
-                (let [m (/ (first ai) (first (first A)))]
-                  [(map #(- %1 (* %2 m)) (rest ai) (rest (first A))) m]))
-              (rest A)))
+            (reduce 
+              (fn [AL ai]
+                (let
+                  [m (/ (first ai) (first (first A)))
+                   ai (map #(- %1 (* %2 m)) (rest ai) (rest (first A)))]
+                  {:A (conj (AL :A) ai) :L (conj (AL :L) m)}))
+              {:A [] :L []} (rest A)))
           (sub-ge [A k p]
             (when-first [a1 A]
               (let [Ap (pivot A 0)
-                    Am (elimination-step (first Ap))]
-                (cons [(reverse (map second Am)) ; multpliers of Li
-                       (first (first Ap))        ; values of Ui
-                       (nth p (second Ap))]      ; pivot pi
-                      (sub-ge (map first Am)  (inc k) (remove #(= (second Ap) %) p))))))]
+                    Am (elimination-step (Ap :A))
+                    li (reverse (Am :L))
+                    ui (first (Ap :A))
+                    pi (nth p (Ap :p))]
+                (cons [li ui pi] ; TÄHÄN VIELÄ SUORA SIJOITUS MAP-RAKENTEESEEN!!!! JA RECUR- TAI REDUCE-RAKENNE
+                      (sub-ge (Am :A) (inc k) (remove (partial = (Ap :p)) p))))))]
   (apply map vector (sub-ge A 0 (range (count A))))))
 
 
@@ -175,7 +179,6 @@
 (defn lu-forward-substitution-sparse [L p b]
   (if (coll? (first b))
     ; If b is a matrix (transposed) calculate each column separately.
-    ; This also returns a transposed result matix.
     (map (partial lu-forward-substitution-sparse L p) b)
     (let [b (map (partial nth b) p)]
       (reduce
@@ -196,18 +199,18 @@
 (defn cholesky-decomposition [A]
   ; A must be symmetric posite-definite matrix.
   (reduce
-    (fn [L i]
+    (fn [C i]
       (let [lower-units (reduce 
-                          (fn [li j]
-                            (conj li
+                          (fn [ci j]
+                            (conj ci
 	                            (/ 
-	                              (- (nth (nth A i) j) (apply + (map * li (nth L j))))
-	                              (nth (nth L j) j 1))))
-                          [] (range (count L)))
+	                              (- (nth (nth A i) j) (apply + (map * ci (nth C j))))
+	                              (nth (nth C j) j 1))))
+                          [] (range (count C)))
             diag-unit (Math/sqrt (- 
                                   (nth (nth A i) i) 
                                   (apply + (map #(* % %) lower-units))))]
-        (conj L (conj lower-units diag-unit))))
+        (conj C (conj lower-units diag-unit))))
     [] (range (count A))))
 (cholesky-decomposition [[25 15 -5][15 18 0][-5 0 11]])
 (cholesky-decomposition [[18 22 54 42][22 70 86 62][54 86 174 134][42 62 134 106]])

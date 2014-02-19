@@ -32,8 +32,23 @@
 (defn matrix-vector-prod [m v] 
   (map #(apply + (map * % v)) m))
 
-(defn matrix-prod [A B]
-  (map (fn [ai] (map (fn [bj] (apply + (map * ai bj))) (apply map list B))) A))
+(defn matrix-prod 
+  "Calculates matrix production A*B. Function takes two matrices
+  A and Bt, where Bt is transpose of B. When A is size n*k and
+  Bt is size m*k returned matrix is size n*m. Matrices are 
+  represented by vector of row vectors."
+  [A Bt]
+  (mapv (fn [ai] (mapv (fn [bj] (apply + (map * ai bj))) Bt)) A))
+
+(defn triangular-to-full
+  "Converts sparse triangular matrix A to full matrix where empty
+  elements are filled with zeros. Matrices are represented by 
+  vector of row vectors."
+  [A]
+  (let [n (count A)]
+    (if (< (count (first A)) n)
+      (map #(into (vec %) (repeat (- n (count %)) 0)) A)    ; Lower triangular matrix.
+      (map #(into (vec (repeat (- n (count %) 0)) %) A))))) ; Upper triangular matrix.
 
 (defn pivot
   ([A] (pivot A (range (count A)) 0))
@@ -296,21 +311,31 @@
       (apply map vector))))                ; Take transpose
 ;(println (inverse-matrix A))
 
-(defn cholesky-decomposition [A]
-  ; A must be symmetric posite-definite matrix.
+
+(defn cholesky-decomposition
+  "Calculates Cholesky decomposition by The Cholesky–Banachiewicz
+  algorithm. Function returns lower triagular matrix C, so that 
+  A = CC*, where input A is symmetric positive-definite matrix. 
+  Matrices are represented by vector of row vectors."
+  [A]
   (reduce
+    ; Calculate C row-by-row
     (fn [C ai]
-      (let [lower-units
+      (let [lower-units ; Calculate lower triangular matrix elements of row i.
               (reduce 
-                (fn [ci cj]
+                (fn [ci cj] ; Calculate row ci with row cj and row ai.
                   (conj ci (/ (- (nth ai (count ci))
                                  (apply + (map * ci cj)))
                               (last cj))))
                 [] C)
-            diag-unit
-              (Math/sqrt (- (last ai) 
+            diag-unit ; Calculate diagonal element.
+              (Math/sqrt (- (last ai) ; Calculate cii with aii and row ci.
                             (apply + (map #(* % %) lower-units))))]
         (conj C (conj lower-units diag-unit))))
     [] (map take (range 1 (inc (count A))) A)))
 ;(cholesky-decomposition [[25 15 -5][15 18 0][-5 0 11]])
-;(cholesky-decomposition [[18 22 54 42][22 70 86 62][54 86 174 134][42 62 134 106]])
+(def C 
+  (triangular-to-full
+    (cholesky-decomposition
+      [[18 22 54 42][22 70 86 62][54 86 174 134][42 62 134 106]])))
+(matrix-prod C C)
